@@ -4,10 +4,24 @@ export function ProductId() { return [0x0907]; }
 export function Publisher() { return "Community"; }
 export function Documentation() { return "troubleshooting/skyloong"; }
 export function Size() { return [24, 6]; }
+export function DefaultPosition() { return [10, 100]; }
+export function DefaultScale() { return 8.0; }
 export function DeviceType() { return "keyboard"; }
 export function Validate(endpoint) { return endpoint.interface === 1; }
-export function ImageUrl() { return "https://assets.signalrgb.com/devices/default/misc/usb-drive-render.png"; }
-export function ControllableParameters() { return []; }
+export function ImageUrl() { return "https://assets.signalrgb.com/devices/default/keyboards/full-size-keyboard-render.png"; }
+/* global
+shutdownColor:readonly
+LightingMode:readonly
+forcedColor:readonly
+keyboard:readonly
+*/
+export function ControllableParameters() {
+	return [
+		{ property: "shutdownColor", group: "lighting", label: "Shutdown Color", description: "This color is applied to the device when the System, or SignalRGB is shutting down", min: "0", max: "360", type: "color", default: "#000000" },
+		{ property: "LightingMode", group: "lighting", label: "Lighting Mode", description: "Determines where the device's RGB comes from. Canvas will pull from the active Effect, while Forced will override it to a specific color", type: "combobox", values: ["Canvas", "Forced"], default: "Canvas" },
+		{ property: "forcedColor", group: "lighting", label: "Forced Color", description: "The color used when 'Forced' Lighting Mode is enabled", min: "0", max: "360", type: "color", default: "#009bde" },
+	];
+}
 
 // Reverse-engineered from OpenRGB's own Skyloong GK104 Pro driver
 // (Controllers/SkyloongController/*, GPL-2.0-or-later, author "Givo"):
@@ -25,6 +39,15 @@ export function ControllableParameters() { return []; }
 //     of a given LED = led.value * 4. Sent in 56-byte chunks (9 full chunks +
 //     one 24-byte tail), each chunk's own header = chunkOffset | (chunkLength << 24).
 export function Initialize() {
+	// Registers this device as input-capable so SignalRGB's macro editor
+	// offers it as a bindable source (matches every other native keyboard
+	// plugin — Hyte_Keeb_TKL_Keyboard.js, Razer_Modern_Keyboard.js, etc.).
+	// The keyboard's vendor HID channel is write-only (OpenRGB's own driver
+	// never reads from it either), so normal keys are already handled by
+	// the OS through the keyboard's separate standard HID interface — this
+	// just tells SignalRGB the device exists as an input source.
+	device.addFeature("keyboard");
+
 	Skyloong.Initialize();
 }
 
@@ -32,8 +55,8 @@ export function Render() {
 	Skyloong.Render();
 }
 
-export function Shutdown() {
-	Skyloong.Shutdown();
+export function Shutdown(SystemSuspending) {
+	Skyloong.Shutdown(SystemSuspending ? "#000000" : shutdownColor);
 }
 
 export function LedNames() {
@@ -136,7 +159,8 @@ class SkyloongGK104Pro {
 		this.lastPingTime = Date.now();
 	}
 
-	Render() {
+	/** @param {string} [overrideColor] */
+	Render(overrideColor) {
 		if (!this.initialized) {return;}
 
 		// Keep the keyboard in "online"/software-controlled mode — some
@@ -148,10 +172,12 @@ class SkyloongGK104Pro {
 		}
 
 		const leData = new Array(TOTAL_LED_BYTES).fill(0x00);
+		const forced = overrideColor ? hexToRgb(overrideColor)
+			: LightingMode === "Forced" ? hexToRgb(forcedColor) : null;
 
 		for (let i = 0; i < LEDS.length; i++) {
 			const led = LEDS[i];
-			const color = device.color(led.x, led.y);
+			const color = forced ?? device.color(led.x, led.y);
 			const idx = led.value * 4;
 
 			leData[idx] = color[0];
@@ -169,12 +195,21 @@ class SkyloongGK104Pro {
 		this.sendCommand(Commands.LE_DEFINE, LeDefineSub.SAVE);
 	}
 
-	Shutdown() {
+	/** @param {string} color */
+	Shutdown(color) {
+		this.Render(color);
 		this.sendCommand(Commands.MODE, ModeSub.OFFLINE);
 	}
 }
 
 const Skyloong = new SkyloongGK104Pro();
+
+/** @param {string} hex */
+function hexToRgb(hex) {
+	const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+
+	return [parseInt(result[1], 16), parseInt(result[2], 16), parseInt(result[3], 16)];
+}
 
 // LED table: name, "value" (Skyloong's own LED address unit — from OpenRGB's
 // keyboard_offset_values table for this exact model) and an approximate
