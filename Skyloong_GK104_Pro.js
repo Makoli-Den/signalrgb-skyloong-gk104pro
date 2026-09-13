@@ -163,11 +163,19 @@ class SkyloongGK104Pro {
 	Render(overrideColor) {
 		if (!this.initialized) {return;}
 
-		// Keep the keyboard in "online"/software-controlled mode — some
-		// keyboards with this kind of online/offline toggle fall back to
-		// onboard lighting after an idle timeout without a periodic ping.
+		// Keep the keyboard in "online"/software-controlled mode. A bare
+		// PING isn't enough to recover this on its own: if the keyboard was
+		// physically disconnected and reconnected (e.g. switched from
+		// Bluetooth back to the USB cable) without SignalRGB re-calling
+		// Initialize() for what it still treats as the same already-known
+		// device, the keyboard's firmware can come back up in its own
+		// default OFFLINE/onboard mode — only the MODE command switches it
+		// back to ONLINE, a PING alone does not. Resend the full
+		// online-mode assertion periodically so this self-heals without
+		// depending on Initialize() firing again.
 		if (Date.now() - this.lastPingTime >= 5000) {
 			this.sendCommand(Commands.PING, 0x00);
+			this.sendCommand(Commands.MODE, ModeSub.ONLINE);
 			this.lastPingTime = Date.now();
 		}
 
