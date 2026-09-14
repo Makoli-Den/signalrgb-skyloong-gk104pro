@@ -39,12 +39,10 @@ export function ControllableParameters() {
 //     of a given LED = led.value * 4. Sent in 56-byte chunks (9 full chunks +
 //     one 24-byte tail), each chunk's own header = chunkOffset | (chunkLength << 24).
 export function Initialize() {
-	// device.addFeature("keyboard") was here to register this device as a
-	// bindable macro-input source. Reverted: it caused SignalRGB to read
-	// HID input from this keyboard in a way that competed with Windows'
-	// own consumption of held-key repeat reports -- after holding a key
-	// for a while, its input would stop registering entirely. Losing the
-	// macro-editor listing is a much smaller cost than broken typing.
+	// Registers this device as input-capable so SignalRGB's macro editor
+	// offers it as a bindable source.
+	device.addFeature("keyboard");
+
 	Skyloong.Initialize();
 }
 
