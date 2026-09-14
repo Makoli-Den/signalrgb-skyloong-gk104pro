@@ -159,19 +159,16 @@ class SkyloongGK104Pro {
 	Render(overrideColor) {
 		if (!this.initialized) {return;}
 
-		// Keep the keyboard in "online"/software-controlled mode. A bare
-		// PING isn't enough to recover this on its own: if the keyboard was
-		// physically disconnected and reconnected (e.g. switched from
-		// Bluetooth back to the USB cable) without SignalRGB re-calling
-		// Initialize() for what it still treats as the same already-known
-		// device, the keyboard's firmware can come back up in its own
-		// default OFFLINE/onboard mode — only the MODE command switches it
-		// back to ONLINE, a PING alone does not. Resend the full
-		// online-mode assertion periodically so this self-heals without
-		// depending on Initialize() firing again.
+		// Keep-alive ping. NOTE: this used to also resend MODE=ONLINE here
+		// (to recover from a BT->USB reconnect the host doesn't re-init for)
+		// -- reverted. Confirmed by timing (~5s, matching this interval)
+		// that resending MODE=ONLINE while already online was itself
+		// resetting the keyboard's held-key tracking, causing input to
+		// silently stop registering during any sustained keypress. That
+		// reconnect-recovery case needs a different, better-targeted fix;
+		// this is a much worse regression to leave in place meanwhile.
 		if (Date.now() - this.lastPingTime >= 5000) {
 			this.sendCommand(Commands.PING, 0x00);
-			this.sendCommand(Commands.MODE, ModeSub.ONLINE);
 			this.lastPingTime = Date.now();
 		}
 
