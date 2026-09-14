@@ -82,6 +82,7 @@ class SkyloongGK104Pro {
 	constructor() {
 		this.initialized = false;
 		this.lastPingTime = 0;
+		this.lastSendTime = 0;
 	}
 
 	// CRC-16/CCITT-FALSE, bit-for-bit port of OpenRGB's Crc16CcittFalse().
@@ -173,6 +174,23 @@ class SkyloongGK104Pro {
 			this.sendCommand(Commands.MODE, ModeSub.ONLINE);
 			this.lastPingTime = Date.now();
 		}
+
+		// Throttle actual LED updates to ~30/sec. SignalRGB can call Render()
+		// much more often than that, and this device sends a full 528-byte
+		// LED table as 11 separate HID writes on every single call -- with
+		// no throttle, that constant write traffic can starve the keyboard's
+		// own AT32F405 MCU enough that it stops reporting a held key's
+		// repeat during sustained typing (confirmed: the drop happens even
+		// with a static Forced color, i.e. it's the send *rate*, not the
+		// animation, that's the problem). 30/sec is well above what any
+		// gradient-style lighting effect needs to look continuous.
+		// Skipped for an explicit one-shot color (Shutdown()'s call) so the
+		// shutdown color is never silently dropped by unlucky timing.
+		const now = Date.now();
+
+		if (!overrideColor && now - this.lastSendTime < 33) {return;}
+
+		this.lastSendTime = now;
 
 		const leData = new Array(TOTAL_LED_BYTES).fill(0x00);
 		const forced = overrideColor ? hexToRgb(overrideColor)
