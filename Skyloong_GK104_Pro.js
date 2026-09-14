@@ -39,15 +39,12 @@ export function ControllableParameters() {
 //     of a given LED = led.value * 4. Sent in 56-byte chunks (9 full chunks +
 //     one 24-byte tail), each chunk's own header = chunkOffset | (chunkLength << 24).
 export function Initialize() {
-	// Registers this device as input-capable so SignalRGB's macro editor
-	// offers it as a bindable source (matches every other native keyboard
-	// plugin — Hyte_Keeb_TKL_Keyboard.js, Razer_Modern_Keyboard.js, etc.).
-	// The keyboard's vendor HID channel is write-only (OpenRGB's own driver
-	// never reads from it either), so normal keys are already handled by
-	// the OS through the keyboard's separate standard HID interface — this
-	// just tells SignalRGB the device exists as an input source.
-	device.addFeature("keyboard");
-
+	// device.addFeature("keyboard") was here to register this device as a
+	// bindable macro-input source. Reverted: it caused SignalRGB to read
+	// HID input from this keyboard in a way that competed with Windows'
+	// own consumption of held-key repeat reports -- after holding a key
+	// for a while, its input would stop registering entirely. Losing the
+	// macro-editor listing is a much smaller cost than broken typing.
 	Skyloong.Initialize();
 }
 
